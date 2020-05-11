@@ -1,5 +1,13 @@
-import React from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+} from 'react';
 import { TextInputProps } from 'react-native';
+import { useField } from '@unform/core';
 
 import { Container, TextInput, Icon } from './styles';
 
@@ -8,15 +16,77 @@ interface InputProps extends TextInputProps {
   icon: string;
 }
 
-const Input: React.FC<InputProps> = ({ name, icon, ...rest }) => (
-  <Container>
-    <Icon name={icon} size={20} color="#666360" />
-    <TextInput
-      keyboardAppearance="dark"
-      placeholderTextColor="#666360"
-      {...rest}
-    />
-  </Container>
-);
+interface InputValueReference {
+  value: string;
+}
 
-export default Input;
+interface InputRef {
+  focus(): void;
+}
+
+const Input: React.RefForwardingComponent<InputRef, InputProps> = (
+  { name, icon, ...rest },
+  ref
+) => {
+  const inputElementRef = useRef<any>(null);
+  const { registerField, defaultValue = '', fieldName, error } = useField(name);
+
+  const inputValueRef = useRef<InputValueReference>({ value: defaultValue });
+
+  // Propriedades para manipular o foco na borda
+  const [isFocused, setIsFocused] = useState(false);
+  const [isFilled, setIsFilled] = useState(false);
+
+  // Seta o foco
+  const handleInputFocus = useCallback(() => {
+    setIsFocused(true);
+  }, []);
+
+  // Tira o foco
+  const handleInputBlur = useCallback(() => {
+    setIsFocused(false);
+
+    // Verifica se o input esta preenchido e seta como true ou false
+    setIsFilled(!!inputValueRef.current.value);
+  }, []);
+
+  // Função para uso do foco no cursor para usar o next do teclado
+  useImperativeHandle(ref, () => ({
+    focus() {
+      inputElementRef.current.focus();
+    },
+  }));
+
+  // Registro do formulario
+  useEffect(() => {
+    registerField<string>({
+      name: fieldName,
+      ref: inputValueRef.current,
+      path: 'value',
+    });
+  }, [fieldName, registerField]);
+
+  return (
+    <Container isFocused={isFocused} isErrored={!!error}>
+      <Icon
+        name={icon}
+        size={20}
+        color={isFocused || isFilled ? '#ff9900' : '#666360'}
+      />
+      <TextInput
+        ref={inputElementRef}
+        keyboardAppearance="dark"
+        placeholderTextColor="#666360"
+        defaultValue={defaultValue}
+        onFocus={handleInputFocus}
+        onBlur={handleInputBlur}
+        onChangeText={(value) => {
+          inputValueRef.current.value = value;
+        }}
+        {...rest}
+      />
+    </Container>
+  );
+};
+
+export default forwardRef(Input);
